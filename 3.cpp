@@ -16,6 +16,9 @@
 
 using namespace std;
 
+void start();
+void processCase();
+
 class UserAuthentication
 {
 private:
@@ -354,9 +357,10 @@ private:
     }
 };
 
-void main()
+int main()
 {
     start();
+    return 0;
 }
 
 void start()
