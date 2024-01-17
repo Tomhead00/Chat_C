@@ -180,6 +180,10 @@ private:
 public:
     TCPServer() : listening(-1), clientSocket(-1) {}
 
+    void setClientSocket(int clientSocket) {
+        clientSocket = clientSocket;
+    }
+
     bool initServer(int port)
     {
         listening = socket(AF_INET, SOCK_STREAM, 0);
@@ -367,11 +371,6 @@ void start()
 {
     sockaddr_in client;
     socklen_t clientSize = sizeof(client);
-
-    clientSocket = accept(listening, reinterpret_cast<sockaddr *>(&client), &clientSize);
-
-    displayClientInfo(client);
-    processCase();
 }
 
 void processCase()
@@ -384,6 +383,14 @@ void processCase()
         cerr << "Server initialization failed!" << endl;
         return -1;
     }
+
+    
+    server.setClientSocket(listening, reinterpret_cast<sockaddr *>(&client), &clientSize);
+
+    displayClientInfo(client);
+    processCase();
+
+
     while (true)
     {
         cout << "debug" << endl;
