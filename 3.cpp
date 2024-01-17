@@ -16,7 +16,6 @@
 
 using namespace std;
 
-void start();
 void processCase();
 
 class UserAuthentication
@@ -98,28 +97,28 @@ public:
 
 class Client
 {
+private:
+    int socket;
+    string name;
+    string roomName;
+
 public:
-    Client(int socket, const std::string &name, const std::string &roomName) : socket(socket), name(name), roomName(roomName) {}
+    Client(int socket, const string &name, const string &roomName) : socket(socket), name(name), roomName(roomName) {}
 
     int getSocket() const
     {
         return socket;
     }
 
-    const std::string &getName() const
+    const string &getName() const
     {
         return name;
     }
 
-    const std::string &getRoomName() const
+    const string &getRoomName() const
     {
         return roomName;
     }
-
-private:
-    int socket;
-    std::string name;
-    std::string roomName;
 };
 
 class listClient
@@ -133,6 +132,8 @@ class TCPServer
 private:
     int listening;
     int clientSocket;
+    // vector<Client> listClient::clients;
+    mutex clientsMutex;
     UserAuthentication auth;
 
 private:
@@ -177,10 +178,74 @@ private:
         send(clientSocket, response, strlen(response), 0);
     }
 
+    string receiveString(int clientSocket)
+    {
+        char buffer[4096];
+        int bytesReceived = recv(clientSocket, buffer, 4096, 0);
+        if (bytesReceived <= 0)
+        {
+            cerr << "Error: Received data from client failed!" << endl;
+            return "";
+        }
+        return string(buffer, 0, bytesReceived);
+    }
+
+    void handleRoom(int clientSocket, const string &clientName, const string &roomName)
+    {
+        char buffer[4096];
+        int bytesReceived;
+
+        while (true)
+        {
+            bytesReceived = recv(clientSocket, buffer, 4096, 0);
+            if (bytesReceived <= 0)
+            {
+                cerr << "Client " << clientName << " offline!" << endl;
+                lock_guard<mutex> guard(clientsMutex);
+                listClient::clients.erase(remove_if(listClient::clients.begin(), listClient::clients.end(), [clientSocket](const Client &client)
+                                                    { return client.getSocket() == clientSocket; }),
+                                          listClient::clients.end());
+                close(clientSocket);
+                return;
+            }
+
+            string message = clientName + ": " + string(buffer, 0, bytesReceived);
+            lock_guard<mutex> guard(clientsMutex);
+            for (const auto &client : listClient::clients)
+            {
+                if (client.getRoomName() == roomName && client.getSocket() != clientSocket)
+                {
+                    send(client.getSocket(), message.c_str(), message.size() + 1, 0);
+                }
+            }
+        }
+    }
+
+    void displayClientInfo(const sockaddr_in &client)
+    {
+        char host[NI_MAXHOST];
+        char service[NI_MAXSERV];
+
+        memset(host, 0, NI_MAXHOST);
+        memset(service, 0, NI_MAXSERV);
+
+        if (getnameinfo(reinterpret_cast<const sockaddr *>(&client), sizeof(client),
+                        host, NI_MAXHOST, service, NI_MAXSERV, 0))
+        {
+            cout << host << " connected on port " << service << endl;
+        }
+        else
+        {
+            inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
+            cout << host << " connected on port " << ntohs(client.sin_port) << endl;
+        }
+    }
+
 public:
     TCPServer() : listening(-1), clientSocket(-1) {}
 
-    void setClientSocket(int clientSocket) {
+    void setClientSocket(int clientSocket)
+    {
         clientSocket = clientSocket;
     }
 
@@ -218,7 +283,7 @@ public:
         // while (true) {
         // Receive room name from client
         cout << "accepted" << endl;
-        std::string roomName = receiveString(clientSocket);
+        string roomName = receiveString(clientSocket);
         cout << "Room name is " << roomName << endl;
         if (roomName.empty())
         {
@@ -227,7 +292,7 @@ public:
         }
 
         // Receive client name from client
-        std::string clientName = receiveString(clientSocket);
+        string clientName = receiveString(clientSocket);
         cout << "Client name is " << clientName << endl;
         if (clientName.empty())
         {
@@ -235,10 +300,10 @@ public:
             // continue;
         }
 
-        std::lock_guard<std::mutex> guard(clientsMutex);
+        lock_guard<mutex> guard(clientsMutex);
         listClient::clients.push_back(Client(clientSocket, clientName, roomName));
 
-        std::thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
+        thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
         clientThread.detach();
         // }
     }
@@ -291,105 +356,29 @@ public:
         close(clientSocket);
         close(listening);
     }
-
-private:
-    // vector<Client> listClient::clients;
-    std::mutex clientsMutex;
-
-    std::string receiveString(int clientSocket)
-    {
-        char buffer[4096];
-        int bytesReceived = recv(clientSocket, buffer, 4096, 0);
-        if (bytesReceived <= 0)
-        {
-            std::cerr << "Error: Received data from client failed!" << std::endl;
-            return "";
-        }
-        return std::string(buffer, 0, bytesReceived);
-    }
-
-    void handleRoom(int clientSocket, const std::string &clientName, const std::string &roomName)
-    {
-        char buffer[4096];
-        int bytesReceived;
-
-        while (true)
-        {
-            bytesReceived = recv(clientSocket, buffer, 4096, 0);
-            if (bytesReceived <= 0)
-            {
-                std::cerr << "Client " << clientName << " offline!" << std::endl;
-                std::lock_guard<std::mutex> guard(clientsMutex);
-                listClient::clients.erase(std::remove_if(listClient::clients.begin(), listClient::clients.end(), [clientSocket](const Client &client)
-                                                         { return client.getSocket() == clientSocket; }),
-                                          listClient::clients.end());
-                close(clientSocket);
-                return;
-            }
-
-            std::string message = clientName + ": " + std::string(buffer, 0, bytesReceived);
-            std::lock_guard<std::mutex> guard(clientsMutex);
-            for (const auto &client : listClient::clients)
-            {
-                if (client.getRoomName() == roomName && client.getSocket() != clientSocket)
-                {
-                    send(client.getSocket(), message.c_str(), message.size() + 1, 0);
-                }
-            }
-        }
-    }
-
-private:
-    void displayClientInfo(const sockaddr_in &client)
-    {
-        char host[NI_MAXHOST];
-        char service[NI_MAXSERV];
-
-        memset(host, 0, NI_MAXHOST);
-        memset(service, 0, NI_MAXSERV);
-
-        if (getnameinfo(reinterpret_cast<const sockaddr *>(&client), sizeof(client),
-                        host, NI_MAXHOST, service, NI_MAXSERV, 0))
-        {
-            cout << host << " connected on port " << service << endl;
-        }
-        else
-        {
-            inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
-            cout << host << " connected on port " << ntohs(client.sin_port) << endl;
-        }
-    }
 };
 
 int main()
 {
-    start();
-    return 0;
-}
-
-void start()
-{
     sockaddr_in client;
     socklen_t clientSize = sizeof(client);
-}
 
-void processCase()
-{
-    char buffer[4096];
+    cout << client << clientSize << endl;
 
     TCPServer server;
     if (!server.initServer(54000))
     {
         cerr << "Server initialization failed!" << endl;
-        return -1;
     }
 
-    
     server.setClientSocket(listening, reinterpret_cast<sockaddr *>(&client), &clientSize);
-
     displayClientInfo(client);
     processCase();
+}
 
+void processCase()
+{
+    char buffer[4096];
 
     while (true)
     {
@@ -442,7 +431,7 @@ void processCase()
             //     // thread roomThread(&TCPServer::chatRoom, this);
             //     // Receive room name from client
             //     cout <<"accepted" << endl;
-            //     std::string roomName = receiveString(clientSocket);
+            //     string roomName = receiveString(clientSocket);
             //     cout << "Room name is " << roomName << endl;
             //     if (roomName.empty()) {
             //         close(clientSocket);
@@ -450,17 +439,17 @@ void processCase()
             //     }
 
             //     // Receive client name from client
-            //     std::string clientName = receiveString(clientSocket);
+            //     string clientName = receiveString(clientSocket);
             //     cout << "Client name is " << clientName << endl;
             //     if (clientName.empty()) {
             //         close(clientSocket);
             //         continue;
             //     }
 
-            //     std::lock_guard<std::mutex> guard(clientsMutex);
+            //     lock_guard<mutex> guard(clientsMutex);
             //     clients.push_back(Client(clientSocket, clientName, roomName));
 
-            //     std::thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
+            //     thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
             //     clientThread.detach();
             // }
             chatRoom();
