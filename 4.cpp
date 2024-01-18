@@ -13,6 +13,8 @@
 
 using namespace std;
 
+const int PORT = 4444;
+
 class Client {
 private:
     int clientSocket;
@@ -160,7 +162,7 @@ public:
     void runMenu() {
         int choice;
         string roomName;
-        connectToServer("10.188.9.20", 54000);
+        connectToServer("10.188.9.20", PORT);
         do {
             displayMenu();
             cout << "Enter your choice: ";

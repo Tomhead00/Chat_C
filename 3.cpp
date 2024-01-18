@@ -16,7 +16,9 @@
 
 using namespace std;
 
-void processCase();
+const int PORT = 4444;
+const int BUFFER_SIZE = 1024;
+const int MAX_CLIENTS = 10;
 
 class UserAuthentication
 {
@@ -121,342 +123,408 @@ public:
     }
 };
 
-class listClient
-{
-public:
-    static vector<Client> clients;
-};
-
 class TCPServer
 {
 private:
-    int listening;
-    int clientSocket;
-    // vector<Client> listClient::clients;
+    int serverSocket;
+    sockaddr_in serverAddr;
+    vector<int> clientSockets;
+    fd_set readfds;
+    int maxSocket;
     mutex clientsMutex;
     UserAuthentication auth;
 
-private:
-    void handleRegistration(int clientSocket)
+    // void handleRegistration(int clientSocket)
+    // {
+    //     char usernameBuffer[1024] = {0};
+    //     char passwordBuffer[1024] = {0};
+
+    //     recv(clientSocket, usernameBuffer, sizeof(usernameBuffer), 0);
+    //     recv(clientSocket, passwordBuffer, sizeof(passwordBuffer), 0);
+
+    //     string username(usernameBuffer);
+    //     string password(passwordBuffer);
+
+    //     bool status = auth.isUserRegistered(username);
+    //     status = !status && auth.registerUser(username, password);
+    //     const char *response;
+    //     if (status)
+    //     {
+    //         response = "Registration successful.";
+    //     }
+    //     else
+    //     {
+    //         response = "Username already exists. Choose a different username.";
+    //     }
+    //     send(clientSocket, response, strlen(response), 0);
+    // }
+
+    // void handleLogin(int clientSocket)
+    // {
+    //     char usernameBuffer[1024] = {0};
+    //     char passwordBuffer[1024] = {0};
+
+    //     read(clientSocket, usernameBuffer, 1024);
+    //     read(clientSocket, passwordBuffer, 1024);
+
+    //     string username(usernameBuffer);
+    //     string password(passwordBuffer);
+
+    //     bool status = auth.isLoggedIn(username, password);
+    //     const char *response = status ? "Login successful." : "Login failed.";
+    //     send(clientSocket, response, strlen(response), 0);
+    // }
+
+    // string receiveString(int clientSocket)
+    // {
+    //     char buffer[4096];
+    //     int bytesReceived = recv(clientSocket, buffer, 4096, 0);
+    //     if (bytesReceived <= 0)
+    //     {
+    //         cerr << "Error: Received data from client failed!" << endl;
+    //         return "";
+    //     }
+    //     return string(buffer, 0, bytesReceived);
+    // }
+
+    // void handleRoom(int clientSocket, const string &clientName, const string &roomName)
+    // {
+    //     char buffer[4096];
+    //     int bytesReceived;
+
+    //     while (true)
+    //     {
+    //         bytesReceived = recv(clientSocket, buffer, 4096, 0);
+    //         if (bytesReceived <= 0)
+    //         {
+    //             cerr << "Client " << clientName << " offline!" << endl;
+    //             lock_guard<mutex> guard(clientsMutex);
+    //             listClient::clients.erase(remove_if(listClient::clients.begin(), listClient::clients.end(), [clientSocket](const Client &client)
+    //                                                 { return client.getSocket() == clientSocket; }),
+    //                                       listClient::clients.end());
+    //             close(clientSocket);
+    //             return;
+    //         }
+
+    //         string message = clientName + ": " + string(buffer, 0, bytesReceived);
+    //         lock_guard<mutex> guard(clientsMutex);
+    //         for (const auto &client : listClient::clients)
+    //         {
+    //             if (client.getRoomName() == roomName && client.getSocket() != clientSocket)
+    //             {
+    //                 send(client.getSocket(), message.c_str(), message.size() + 1, 0);
+    //             }
+    //         }
+    //     }
+    // }
+
+    // void processCase(TCPServer server)
+    // {
+    //     char buffer[4096];
+
+    //     while (true)
+    //     {
+    //         int bytesReceived = recv(server.getClientSocket(), buffer, sizeof(buffer), 0);
+
+    //         if (bytesReceived == -1)
+    //         {
+    //             cerr << "Error while receiving data!" << endl;
+    //             return;
+    //         }
+    //         if (bytesReceived == 0)
+    //         {
+    //             cout << "Client has disconnected" << endl;
+    //             return;
+    //         }
+
+    //         int choice = stoi(string(buffer, 0, bytesReceived));
+    //         // string userInput;
+    //         cout << "Client selected option " << choice << endl;
+    //         switch (choice)
+    //         {
+    //         case 1:
+    //         {
+    //             thread receivingThread(&TCPServer::receiveData, this);
+    //             while (true)
+    //             {
+    //                 string userInput;
+    //                 cout << "You: ";
+    //                 getline(cin, userInput);
+    //                 sendData(userInput);
+    //             }
+    //             break;
+    //         }
+    //         case 2:
+    //         {
+    //             if (clientSocket < 0)
+    //             {
+    //                 cerr << "Error in accepting connection." << endl;
+    //                 // continue;
+    //             }
+    //             cout << "New client connected." << endl;
+    //             handleClient(clientSocket);
+    //             break;
+    //         }
+    //         case 3:
+    //         {
+    //             // while(true)
+    //             // {
+    //             //     // thread roomThread(&TCPServer::chatRoom, this);
+    //             //     // Receive room name from client
+    //             //     cout <<"accepted" << endl;
+    //             //     string roomName = receiveString(clientSocket);
+    //             //     cout << "Room name is " << roomName << endl;
+    //             //     if (roomName.empty()) {
+    //             //         close(clientSocket);
+    //             //         continue;
+    //             //     }
+
+    //             //     // Receive client name from client
+    //             //     string clientName = receiveString(clientSocket);
+    //             //     cout << "Client name is " << clientName << endl;
+    //             //     if (clientName.empty()) {
+    //             //         close(clientSocket);
+    //             //         continue;
+    //             //     }
+
+    //             //     lock_guard<mutex> guard(clientsMutex);
+    //             //     clients.push_back(Client(clientSocket, clientName, roomName));
+
+    //             //     thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
+    //             //     clientThread.detach();
+    //             // }
+    //             chatRoom();
+    //             break;
+    //         }
+    //         default:
+    //             return;
+    //         }
+    //     }
+    // }
+    
+    // void displayClientInfo(const sockaddr_in &client)
+    // {
+    //     char host[NI_MAXHOST];
+    //     char service[NI_MAXSERV];
+
+    //     memset(host, 0, NI_MAXHOST);
+    //     memset(service, 0, NI_MAXSERV);
+
+    //     if (getnameinfo(reinterpret_cast<const sockaddr *>(&client), sizeof(client),
+    //                     host, NI_MAXHOST, service, NI_MAXSERV, 0))
+    //     {
+    //         cout << host << " connected on port " << service << endl;
+    //     }
+    //     else
+    //     {
+    //         inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
+    //         cout << host << " connected on port " << ntohs(client.sin_port) << endl;
+    //     }
+    // }
+
+    // void chatRoom()
+    // {
+    //     // while (true) {
+    //     // Receive room name from client
+    //     cout << "accepted" << endl;
+    //     string roomName = receiveString(clientSocket);
+    //     cout << "Room name is " << roomName << endl;
+    //     if (roomName.empty())
+    //     {
+    //         close(clientSocket);
+    //         // continue;
+    //     }
+
+    //     // Receive client name from client
+    //     string clientName = receiveString(clientSocket);
+    //     cout << "Client name is " << clientName << endl;
+    //     if (clientName.empty())
+    //     {
+    //         close(clientSocket);
+    //         // continue;
+    //     }
+
+    //     lock_guard<mutex> guard(clientsMutex);
+    //     listClient::clients.push_back(Client(clientSocket, clientName, roomName));
+
+    //     thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
+    //     clientThread.detach();
+    //     // }
+    // }
+
+    // void receiveData()
+    // {
+    //     char buffer[4096];
+    //     while (true)
+    //     {
+    //         int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    //         if (bytesReceived == -1)
+    //         {
+    //             cerr << "Error while receiving data!" << endl;
+    //             break;
+    //         }
+    //         if (bytesReceived == 0)
+    //         {
+    //             cout << "Client has disconnected" << endl;
+    //             break;
+    //         }
+    //         cout << "\nClient: " << string(buffer, 0, bytesReceived) << endl;
+    //     }
+    // }
+
+    // void sendData(const string &data)
+    // {
+    //     send(clientSocket, data.c_str(), data.size() + 1, 0);
+    // }
+
+    // void handleClient(int clientSocket)
+    // {
+    //     char buffer[4096];
+    //     int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    //     int option = stoi(string(buffer, 0, bytesReceived));
+
+    //     if (option == 1)
+    //     {
+    //         // Register
+    //         handleRegistration(clientSocket);
+    //     }
+    //     else if (option == 2)
+    //     {
+    //         // Login
+    //         handleLogin(clientSocket);
+    //     }
+    // }
+
+    void closeConnection()
     {
-        char usernameBuffer[1024] = {0};
-        char passwordBuffer[1024] = {0};
-
-        recv(clientSocket, usernameBuffer, sizeof(usernameBuffer), 0);
-        recv(clientSocket, passwordBuffer, sizeof(passwordBuffer), 0);
-
-        string username(usernameBuffer);
-        string password(passwordBuffer);
-
-        bool status = auth.isUserRegistered(username);
-        status = !status && auth.registerUser(username, password);
-        const char *response;
-        if (status)
+        // Đóng các kết nối còn lại
+        for (int clientSocket : clientSockets)
         {
-            response = "Registration successful.";
+            close(clientSocket);
         }
-        else
-        {
-            response = "Username already exists. Choose a different username.";
-        }
-        send(clientSocket, response, strlen(response), 0);
-    }
 
-    void handleLogin(int clientSocket)
-    {
-        char usernameBuffer[1024] = {0};
-        char passwordBuffer[1024] = {0};
-
-        read(clientSocket, usernameBuffer, 1024);
-        read(clientSocket, passwordBuffer, 1024);
-
-        string username(usernameBuffer);
-        string password(passwordBuffer);
-
-        bool status = auth.isLoggedIn(username, password);
-        const char *response = status ? "Login successful." : "Login failed.";
-        send(clientSocket, response, strlen(response), 0);
-    }
-
-    string receiveString(int clientSocket)
-    {
-        char buffer[4096];
-        int bytesReceived = recv(clientSocket, buffer, 4096, 0);
-        if (bytesReceived <= 0)
-        {
-            cerr << "Error: Received data from client failed!" << endl;
-            return "";
-        }
-        return string(buffer, 0, bytesReceived);
-    }
-
-    void handleRoom(int clientSocket, const string &clientName, const string &roomName)
-    {
-        char buffer[4096];
-        int bytesReceived;
-
-        while (true)
-        {
-            bytesReceived = recv(clientSocket, buffer, 4096, 0);
-            if (bytesReceived <= 0)
-            {
-                cerr << "Client " << clientName << " offline!" << endl;
-                lock_guard<mutex> guard(clientsMutex);
-                listClient::clients.erase(remove_if(listClient::clients.begin(), listClient::clients.end(), [clientSocket](const Client &client)
-                                                    { return client.getSocket() == clientSocket; }),
-                                          listClient::clients.end());
-                close(clientSocket);
-                return;
-            }
-
-            string message = clientName + ": " + string(buffer, 0, bytesReceived);
-            lock_guard<mutex> guard(clientsMutex);
-            for (const auto &client : listClient::clients)
-            {
-                if (client.getRoomName() == roomName && client.getSocket() != clientSocket)
-                {
-                    send(client.getSocket(), message.c_str(), message.size() + 1, 0);
-                }
-            }
-        }
-    }
-
-    void displayClientInfo(const sockaddr_in &client)
-    {
-        char host[NI_MAXHOST];
-        char service[NI_MAXSERV];
-
-        memset(host, 0, NI_MAXHOST);
-        memset(service, 0, NI_MAXSERV);
-
-        if (getnameinfo(reinterpret_cast<const sockaddr *>(&client), sizeof(client),
-                        host, NI_MAXHOST, service, NI_MAXSERV, 0))
-        {
-            cout << host << " connected on port " << service << endl;
-        }
-        else
-        {
-            inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
-            cout << host << " connected on port " << ntohs(client.sin_port) << endl;
-        }
+        // Đóng socket
+        close(serverSocket);
     }
 
 public:
-    TCPServer() : listening(-1), clientSocket(-1) {}
+    TCPServer() {}
 
-    void setClientSocket(int clientSocket)
+    bool start(int port)
     {
-        clientSocket = clientSocket;
-    }
-
-    bool initServer(int port)
-    {
-        listening = socket(AF_INET, SOCK_STREAM, 0);
-        if (listening == -1)
+        serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (serverSocket == -1)
         {
             cerr << "Unable to create socket! Cancel..." << endl;
             return false;
         }
 
-        sockaddr_in hint;
-        hint.sin_family = AF_INET;
-        hint.sin_port = htons(port);
-        inet_pton(AF_INET, "0.0.0.0", &hint.sin_addr);
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_addr.s_addr = INADDR_ANY;
+        serverAddr.sin_port = htons(PORT);
 
-        if (bind(listening, reinterpret_cast<sockaddr *>(&hint), sizeof(hint)) == -1)
+        if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
         {
-            cerr << "Binding failed..." << endl;
+            cerr << "Không thể liên kết socket." << endl;
+            close(serverSocket);
             return false;
         }
 
-        if (listen(listening, SOMAXCONN) == -1)
+        // Lắng nghe kết nối
+        if (listen(serverSocket, MAX_CLIENTS) == -1)
         {
-            cerr << "Listening failed..." << endl;
+            cerr << "Lỗi khi lắng nghe kết nối." << endl;
+            close(serverSocket);
             return false;
         }
 
-        return true;
-    }
+        cout << "Đang chờ kết nối từ client..." << endl;
 
-    void chatRoom()
-    {
-        // while (true) {
-        // Receive room name from client
-        cout << "accepted" << endl;
-        string roomName = receiveString(clientSocket);
-        cout << "Room name is " << roomName << endl;
-        if (roomName.empty())
-        {
-            close(clientSocket);
-            // continue;
-        }
-
-        // Receive client name from client
-        string clientName = receiveString(clientSocket);
-        cout << "Client name is " << clientName << endl;
-        if (clientName.empty())
-        {
-            close(clientSocket);
-            // continue;
-        }
-
-        lock_guard<mutex> guard(clientsMutex);
-        listClient::clients.push_back(Client(clientSocket, clientName, roomName));
-
-        thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
-        clientThread.detach();
-        // }
-    }
-
-    void receiveData()
-    {
-        char buffer[4096];
         while (true)
         {
-            int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-            if (bytesReceived == -1)
+            FD_ZERO(&readfds);
+            FD_SET(serverSocket, &readfds);
+            maxSocket = serverSocket;
+
+            for (const int &clientSocket : clientSockets)
             {
-                cerr << "Error while receiving data!" << endl;
+                FD_SET(clientSocket, &readfds);
+                if (clientSocket > maxSocket)
+                {
+                    maxSocket = clientSocket;
+                }
+            }
+
+            // Sử dụng select để chờ sự kiện trên các socket
+            int activity = select(maxSocket + 1, &readfds, nullptr, nullptr, nullptr);
+
+            if (activity < 0)
+            {
+                cerr << "Lỗi khi sử dụng select." << endl;
                 break;
             }
-            if (bytesReceived == 0)
+
+            // Kết nối mới
+            if (FD_ISSET(serverSocket, &readfds))
             {
-                cout << "Client has disconnected" << endl;
-                break;
+                sockaddr_in clientAddr;
+                socklen_t clientAddrLen = sizeof(clientAddr);
+                int newClientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &clientAddrLen);
+
+                if (newClientSocket < 0)
+                {
+                    cerr << "Lỗi khi chấp nhận kết nối." << endl;
+                }
+                else
+                {
+                    cout << "Đã kết nối với client." << endl;
+                    clientSockets.push_back(newClientSocket);
+                }
             }
-            cout << "\nClient: " << string(buffer, 0, bytesReceived) << endl;
+
+            // Xử lý dữ liệu từ các client đã kết nối
+            for (auto it = clientSockets.begin(); it != clientSockets.end();)
+            {
+                int clientSocket = *it;
+
+                if (FD_ISSET(clientSocket, &readfds))
+                {
+                    char buffer[BUFFER_SIZE];
+                    memset(buffer, 0, sizeof(buffer));
+                    int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+
+                    if (bytesReceived <= 0)
+                    {
+                        cerr << "Kết nối đã đóng." << endl;
+                        close(clientSocket);
+                        it = clientSockets.erase(it);
+                    }
+                    else
+                    {
+                        cout << "Client " << clientSocket << ": " << buffer << endl;
+
+                        // Gửi dữ liệu đến client
+                        cout << "Server: ";
+                        cin.getline(buffer, sizeof(buffer));
+                        send(clientSocket, buffer, strlen(buffer), 0);
+
+                        ++it;
+                    }
+                }
+                else
+                {
+                    ++it;
+                }
+            }
         }
-    }
 
-    void sendData(const string &data)
-    {
-        send(clientSocket, data.c_str(), data.size() + 1, 0);
-    }
-
-    void handleClient(int clientSocket)
-    {
-        char buffer[4096];
-        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-        int option = stoi(string(buffer, 0, bytesReceived));
-
-        if (option == 1)
-        {
-            // Register
-            handleRegistration(clientSocket);
-        }
-        else if (option == 2)
-        {
-            // Login
-            handleLogin(clientSocket);
-        }
-    }
-
-    void closeConnection()
-    {
-        close(clientSocket);
-        close(listening);
+        closeConnection();
+        return true;
     }
 };
 
 int main()
 {
-    sockaddr_in client;
-    socklen_t clientSize = sizeof(client);
-
-    cout << client << clientSize << endl;
-
     TCPServer server;
-    if (!server.initServer(54000))
-    {
-        cerr << "Server initialization failed!" << endl;
-    }
-
-    server.setClientSocket(listening, reinterpret_cast<sockaddr *>(&client), &clientSize);
-    displayClientInfo(client);
-    processCase();
-}
-
-void processCase()
-{
-    char buffer[4096];
-
-    while (true)
-    {
-        cout << "debug" << endl;
-        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-
-        if (bytesReceived == -1)
-        {
-            cerr << "Error while receiving data!" << endl;
-            return;
-        }
-        if (bytesReceived == 0)
-        {
-            cout << "Client has disconnected" << endl;
-            return;
-        }
-
-        int choice = stoi(string(buffer, 0, bytesReceived));
-        // string userInput;
-        cout << "Client selected option " << choice << endl;
-        switch (choice)
-        {
-        case 1:
-        {
-            thread receivingThread(&TCPServer::receiveData, this);
-            while (true)
-            {
-                string userInput;
-                cout << "You: ";
-                getline(cin, userInput);
-                sendData(userInput);
-            }
-            break;
-        }
-        case 2:
-        {
-            if (clientSocket < 0)
-            {
-                cerr << "Error in accepting connection." << endl;
-                // continue;
-            }
-            cout << "New client connected." << endl;
-            handleClient(clientSocket);
-            break;
-        }
-        case 3:
-        {
-            // while(true)
-            // {
-            //     // thread roomThread(&TCPServer::chatRoom, this);
-            //     // Receive room name from client
-            //     cout <<"accepted" << endl;
-            //     string roomName = receiveString(clientSocket);
-            //     cout << "Room name is " << roomName << endl;
-            //     if (roomName.empty()) {
-            //         close(clientSocket);
-            //         continue;
-            //     }
-
-            //     // Receive client name from client
-            //     string clientName = receiveString(clientSocket);
-            //     cout << "Client name is " << clientName << endl;
-            //     if (clientName.empty()) {
-            //         close(clientSocket);
-            //         continue;
-            //     }
-
-            //     lock_guard<mutex> guard(clientsMutex);
-            //     clients.push_back(Client(clientSocket, clientName, roomName));
-
-            //     thread clientThread(&TCPServer::handleRoom, this, clientSocket, clientName, roomName);
-            //     clientThread.detach();
-            // }
-            chatRoom();
-            break;
-        }
-        default:
-            return;
-        }
-    }
+    server.start(PORT);
 }
