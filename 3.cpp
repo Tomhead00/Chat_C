@@ -127,10 +127,10 @@ class TCPServer
 {
 private:
     int serverSocket;
+    int maxSocket;
     sockaddr_in serverAddr;
     vector<int> clientSockets;
     fd_set readfds;
-    int maxSocket;
     mutex clientsMutex;
     UserAuthentication auth;
 
@@ -420,8 +420,8 @@ public:
         }
 
         serverAddr.sin_family = AF_INET;
-        serverAddr.sin_addr.s_addr = INADDR_ANY;
-        serverAddr.sin_port = htons(PORT);
+        serverAddr.sin_port = htons(port);
+        inet_pton(AF_INET, "0.0.0.0", &serverAddr.sin_addr);
 
         if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
         {
@@ -463,6 +463,7 @@ public:
                 cerr << "Lỗi khi sử dụng select." << endl;
                 break;
             }
+            cout << "123123123131312" << endl;
 
             // Kết nối mới
             if (FD_ISSET(serverSocket, &readfds))
